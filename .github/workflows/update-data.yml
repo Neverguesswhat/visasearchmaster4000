@@ -1,0 +1,76 @@
+name: Update LCA Data
+
+on:
+  # Run automatically on the 5th of January, April, July, October
+  # (DOL publishes ~2 weeks after each quarter ends)
+  schedule:
+    - cron: '0 8 5 1,4,7,10 *'
+
+  # Also allow manual trigger from GitHub UI with configurable options
+  workflow_dispatch:
+    inputs:
+      quarters_back:
+        description: 'How many quarters of data to include (e.g. 8 = 2 years)'
+        required: false
+        default: '8'
+      deploy:
+        description: 'Deploy to DreamHost after building? (true/false)'
+        required: false
+        default: 'true'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install openpyxl
+
+      - name: Build data.js
+        env:
+          QUARTERS_BACK: ${{ github.event.inputs.quarters_back || '8' }}
+        run: python3 ci_build.py
+
+      - name: Show output size
+        run: |
+          ls -lh data.js
+          wc -c data.js
+
+      - name: Deploy to DreamHost via SFTP
+        if: ${{ github.event.inputs.deploy != 'false' }}
+        env:
+          DREAMHOST_HOST: ${{ secrets.DREAMHOST_HOST }}
+          DREAMHOST_USER: ${{ secrets.DREAMHOST_USER }}
+          DREAMHOST_KEY:  ${{ secrets.DREAMHOST_KEY }}
+          DREAMHOST_PATH: ${{ secrets.DREAMHOST_PATH }}
+        run: |
+          # Write SSH key
+          mkdir -p ~/.ssh
+          echo "$DREAMHOST_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DREAMHOST_HOST" >> ~/.ssh/known_hosts
+
+          # Upload data.js and index.html
+          sftp -i ~/.ssh/deploy_key -b - "$DREAMHOST_USER@$DREAMHOST_HOST" << EOF
+          cd $DREAMHOST_PATH
+          put data.js
+          put index.html
+          EOF
+
+          echo "✓ Deployed to $DREAMHOST_HOST:$DREAMHOST_PATH"
+
+      - name: Commit data.js to repo (optional backup)
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'data: auto-update LCA data'
+          file_pattern: 'data.js'
+          skip_dirty_check: false

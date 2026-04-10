@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LCA Visa Sponsorship Dashboard — FY2025 Q1</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="data.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0f1117; --surface:#1a1d27; --surface2:#22263a; --border:#2e3347;
+      --accent:#4f6ef7; --green:#22c55e; --yellow:#f59e0b; --red:#ef4444;
+      --purple:#a78bfa; --text:#e2e8f0; --muted:#7c8499; --r:12px;
+      --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    }
+    body { font-family:var(--font); background:var(--bg); color:var(--text); min-height:100vh; }
+
+    /* Layout */
+    .sidebar { position:fixed; left:0; top:0; bottom:0; width:252px; background:var(--surface); border-right:1px solid var(--border); overflow-y:auto; padding:22px 18px; z-index:10; }
+    .main    { margin-left:252px; padding:26px 26px 60px; }
+    @media(max-width:800px){ .sidebar{position:static;width:100%;border-right:none;border-bottom:1px solid var(--border)} .main{margin-left:0;padding:16px} }
+
+    /* Brand */
+    .brand { margin-bottom:24px; }
+    .brand h1 { font-size:15px; font-weight:700; line-height:1.3; }
+    .brand p  { font-size:11px; color:var(--muted); margin-top:3px; }
+
+    /* Filters */
+    .fsec { margin-bottom:18px; }
+    .fsec h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:8px; padding-bottom:5px; border-bottom:1px solid var(--border); }
+    .fg { margin-bottom:8px; }
+    .fg label { display:block; font-size:11px; color:var(--muted); margin-bottom:4px; }
+    .fg input, .fg select {
+      width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:7px;
+      color:var(--text); font-size:12px; padding:7px 9px; outline:none; -webkit-appearance:none;
+      transition:border-color .15s;
+    }
+    .fg input:focus, .fg select:focus { border-color:var(--accent); }
+    .fg input::placeholder { color:var(--muted); }
+    .fg select {
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%237c8499' d='M5 7L0 2h10z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 8px center; padding-right:24px;
+    }
+    .wage-row { display:flex; gap:5px; }
+    .wage-row input { flex:1; min-width:0; }
+    .btn-reset { width:100%; background:transparent; border:1px solid var(--border); border-radius:7px; color:var(--muted); font-size:12px; padding:7px; cursor:pointer; transition:all .15s; margin-top:2px; }
+    .btn-reset:hover { border-color:var(--accent); color:var(--text); }
+    .btn-me { width:100%; border-radius:7px; font-size:13px; font-weight:700; padding:9px; cursor:pointer; transition:all .2s; background:transparent; border:1.5px dashed var(--muted); color:var(--muted); letter-spacing:.3px; }
+    .btn-me:hover { border-color:var(--purple); color:var(--purple); }
+    .btn-me.on { background:rgba(167,139,250,.15); border:1.5px solid var(--purple); color:var(--purple); }
+
+    /* Loading overlay */
+    #loading { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:100; flex-direction:column; gap:14px; font-size:13px; color:var(--muted); }
+    .spin { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* Stats */
+    .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+    .sc { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:16px 18px; }
+    .sl { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin-bottom:7px; }
+    .sv { font-size:24px; font-weight:700; line-height:1; }
+    .ss { font-size:11px; color:var(--muted); margin-top:4px; }
+    .ca .sv{color:var(--accent)} .cg .sv{color:var(--green)} .cy .sv{color:var(--yellow)} .cr .sv{color:var(--red)} .cp .sv{color:var(--purple)}
+
+    /* Charts */
+    .cgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+    .cgrid .wide { grid-column:span 2; }
+    @media(max-width:1100px){ .cgrid{grid-template-columns:1fr} .cgrid .wide{grid-column:span 1} }
+    .cc { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:18px; }
+    .ct { font-size:10px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); margin-bottom:14px; font-weight:600; }
+    .cw { position:relative; height:200px; }
+    .cw.tall { height:270px; }
+
+    /* Section header */
+    .sh { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:6px; }
+    .sh h2 { font-size:14px; font-weight:600; }
+    .rm { font-size:12px; color:var(--muted); }
+    .rm strong { color:var(--text); }
+
+    /* Table */
+    .tw { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; }
+    .ts { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    thead th { background:var(--surface2); padding:10px 13px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); font-weight:600; white-space:nowrap; cursor:pointer; user-select:none; }
+    thead th:hover { color:var(--text); }
+    thead th .si { margin-left:3px; opacity:.3; }
+    thead th.sorted .si { opacity:1; color:var(--accent); }
+    tbody tr { border-top:1px solid var(--border); }
+    tbody tr:hover { background:rgba(255,255,255,.025); }
+    tbody td { padding:9px 13px; }
+    td.mono { font-family:'SF Mono','Fira Code',monospace; font-size:11px; color:var(--muted); }
+
+    .pill { display:inline-flex; align-items:center; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; white-space:nowrap; }
+    .p-cert  { background:rgba(34,197,94,.12);  color:var(--green); }
+    .p-with  { background:rgba(245,158,11,.12); color:var(--yellow); }
+    .p-deny  { background:rgba(239,68,68,.12);  color:var(--red); }
+    .p-cw    { background:rgba(167,139,250,.12);color:var(--purple); }
+    .tag { display:inline-block; padding:2px 6px; border-radius:5px; font-size:10px; font-weight:600; background:rgba(79,110,247,.12); color:var(--accent); }
+
+    /* Pagination */
+    .pag { display:flex; align-items:center; justify-content:center; gap:4px; padding:12px; border-top:1px solid var(--border); flex-wrap:wrap; }
+    .pg { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:4px 9px; font-size:11px; cursor:pointer; transition:all .1s; min-width:30px; text-align:center; }
+    .pg:hover { border-color:var(--accent); color:var(--accent); }
+    .pg.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+    .pg:disabled { opacity:.3; cursor:default; }
+    .empty { padding:50px; text-align:center; color:var(--muted); font-size:13px; }
+
+    ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  </style>
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><span>Loading 107k records…</span></div>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="brand">
+    <h1>Visa Sponsorship Dashboard</h1>
+    <p>FY2025 Q1 · DOL LCA Disclosure Data</p>
+  </div>
+
+  <div class="fsec">
+    <h3>Quick Filter</h3>
+    <button class="btn-me" id="btn-me" onclick="toggleMe()">✦ Me — Design Roles</button>
+  </div>
+
+  <div class="fsec">
+    <h3>Search</h3>
+    <div class="fg"><label>Employer / Job / Case #</label><input id="f-search" type="text" placeholder="Type to search…" /></div>
+  </div>
+
+  <div class="fsec">
+    <h3>Visa &amp; Status</h3>
+    <div class="fg"><label>Visa Type</label><select id="f-visa"><option value="">All Types</option></select></div>
+    <div class="fg"><label>Case Status</label><select id="f-status"><option value="">All Statuses</option></select></div>
+  </div>
+
+  <div class="fsec">
+    <h3>Location</h3>
+    <div class="fg"><label>Worksite State</label><select id="f-state"><option value="">All States</option></select></div>
+  </div>
+
+  <div class="fsec">
+    <h3>Occupation (SOC)</h3>
+    <div class="fg"><label>Category</label><select id="f-soc"><option value="">All Occupations</option></select></div>
+  </div>
+
+  <div class="fsec">
+    <h3>Wage (Annual)</h3>
+    <div class="fg"><label>Min – Max ($/yr)</label>
+      <div class="wage-row">
+        <input id="f-wmin" type="number" placeholder="Min" min="0" step="10000" />
+        <input id="f-wmax" type="number" placeholder="Max" min="0" step="10000" />
+      </div>
+    </div>
+  </div>
+
+  <div class="fsec">
+    <h3>Date Received</h3>
+    <div class="fg"><label>From</label><input id="f-dfrom" type="date" /></div>
+    <div class="fg"><label>To</label><input id="f-dto" type="date" /></div>
+  </div>
+
+  <button class="btn-reset" onclick="reset()">↺ Reset All Filters</button>
+</aside>
+
+<!-- Main -->
+<main class="main">
+  <div class="stats">
+    <div class="sc ca"><div class="sl">Total Cases</div><div class="sv" id="s-total">—</div><div class="ss">matching filters</div></div>
+    <div class="sc cg"><div class="sl">Certified</div><div class="sv" id="s-cert">—</div><div class="ss" id="s-cert-p">—</div></div>
+    <div class="sc cp"><div class="sl">Cert-Withdrawn</div><div class="sv" id="s-cw">—</div><div class="ss" id="s-cw-p">—</div></div>
+    <div class="sc cy"><div class="sl">Withdrawn</div><div class="sv" id="s-with">—</div><div class="ss" id="s-with-p">—</div></div>
+    <div class="sc cr"><div class="sl">Denied</div><div class="sv" id="s-deny">—</div><div class="ss" id="s-deny-p">—</div></div>
+  </div>
+
+  <div class="cgrid">
+    <div class="cc"><div class="ct">By Status</div><div class="cw"><canvas id="c-status"></canvas></div></div>
+    <div class="cc"><div class="ct">By Visa Type</div><div class="cw"><canvas id="c-visa"></canvas></div></div>
+    <div class="cc wide"><div class="ct">Monthly Volume (Received Date)</div><div class="cw"><canvas id="c-time"></canvas></div></div>
+    <div class="cc"><div class="ct">Top 15 Employers</div><div class="cw tall"><canvas id="c-emp"></canvas></div></div>
+    <div class="cc"><div class="ct">Top 10 Occupations</div><div class="cw tall"><canvas id="c-soc"></canvas></div></div>
+  </div>
+
+  <div class="sh">
+    <h2>Case Records</h2>
+    <div class="rm"><strong id="t-count">—</strong> results · page <strong id="t-page">1</strong></div>
+  </div>
+  <div class="tw">
+    <div class="ts"><table>
+      <thead><tr>
+        <th onclick="sortBy(0)" id="th0">Case # <span class="si">↕</span></th>
+        <th onclick="sortBy(1)" id="th1">Status <span class="si">↕</span></th>
+        <th onclick="sortBy(2)" id="th2">Visa <span class="si">↕</span></th>
+        <th onclick="sortBy(4)" id="th4">Employer <span class="si">↕</span></th>
+        <th onclick="sortBy(3)" id="th3">Job Title <span class="si">↕</span></th>
+        <th onclick="sortBy(5)" id="th5">State <span class="si">↕</span></th>
+        <th onclick="sortBy(6)" id="th6">Wage <span class="si">↕</span></th>
+        <th onclick="sortBy(8)" id="th8" class="sorted">Received <span class="si">↓</span></th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table></div>
+    <div class="pag" id="pag"></div>
+  </div>
+</main>
+
+<script>
+// D columns: [0]case_number [1]case_status [2]visa_class [3]job_title [4]employer_name
+//            [5]worksite_state [6]wage_from [7]wage_unit [8]received_date [9]soc_title
+
+const ME_KW = ['UX Designer','UX/UI Designer','UI/UX Designer','User Experience Designer',
+  'User Interface Designer','Product Designer','Graphic Designer','Visual Designer',
+  'Interaction Designer','Experience Designer','Digital Designer','Brand Designer',
+  'Motion Designer','Web Designer','UI Designer','Human Interface Designer',
+  'UX Researcher','Design Lead','Design Manager','Senior Designer','Staff Designer','Principal Designer'];
+const ME_RE = new RegExp(ME_KW.map(k => k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'), 'i');
+
+const STATUS_COLORS = {
+  'Certified':'rgba(34,197,94,.8)','Certified - Withdrawn':'rgba(167,139,250,.8)',
+  'Withdrawn':'rgba(245,158,11,.8)','Denied':'rgba(239,68,68,.8)'
+};
+const PALETTE = ['rgba(79,110,247,.8)','rgba(124,58,237,.8)','rgba(34,197,94,.8)',
+  'rgba(245,158,11,.8)','rgba(239,68,68,.8)','rgba(20,184,166,.8)'];
+const AX = { ticks:{color:'#7c8499',font:{size:10}}, grid:{color:'rgba(46,51,71,.7)'}, border:{color:'rgba(0,0,0,0)'} };
+
+let filtered = [], charts = {}, sortCol = 8, sortDir = -1, page = 1;
+const PER = 50;
+let me = false, debTimer;
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  buildDropdowns();
+  bindInputs();
+  applyFilters();
+  document.getElementById('loading').style.display = 'none';
+});
+
+// ── Dropdowns ─────────────────────────────────────────────────────────────────
+function buildDropdowns() {
+  const visa = new Set(), status = new Set(), state = new Set(), soc = new Set();
+  D.forEach(r => {
+    if (r[2]) visa.add(r[2]);
+    if (r[1]) status.add(r[1]);
+    if (r[5]) state.add(r[5]);
+    if (r[9]) soc.add(r[9]);
+  });
+  fill('f-visa',   [...visa].sort());
+  fill('f-status', [...status].sort());
+  fill('f-state',  [...state].sort());
+  fill('f-soc',    [...soc].sort());
+}
+function fill(id, vals) {
+  const sel = document.getElementById(id);
+  vals.forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; sel.appendChild(o); });
+}
+
+// ── Bind inputs ───────────────────────────────────────────────────────────────
+function bindInputs() {
+  ['f-visa','f-status','f-state','f-soc','f-dfrom','f-dto'].forEach(id =>
+    document.getElementById(id).addEventListener('change', () => { page=1; applyFilters(); }));
+  ['f-search','f-wmin','f-wmax'].forEach(id =>
+    document.getElementById(id).addEventListener('input', () => {
+      clearTimeout(debTimer); debTimer = setTimeout(() => { page=1; applyFilters(); }, 300);
+    }));
+}
+
+function toggleMe() {
+  me = !me; page = 1;
+  document.getElementById('btn-me').classList.toggle('on', me);
+  applyFilters();
+}
+
+function reset() {
+  me = false;
+  document.getElementById('btn-me').classList.remove('on');
+  ['f-search','f-wmin','f-wmax','f-dfrom','f-dto'].forEach(id => document.getElementById(id).value = '');
+  ['f-visa','f-status','f-state','f-soc'].forEach(id => document.getElementById(id).value = '');
+  page = 1; applyFilters();
+}
+
+// ── Filter ────────────────────────────────────────────────────────────────────
+function applyFilters() {
+  const search = document.getElementById('f-search').value.trim().toLowerCase();
+  const visa   = document.getElementById('f-visa').value;
+  const status = document.getElementById('f-status').value;
+  const state  = document.getElementById('f-state').value;
+  const soc    = document.getElementById('f-soc').value;
+  const wmin   = parseFloat(document.getElementById('f-wmin').value) || null;
+  const wmax   = parseFloat(document.getElementById('f-wmax').value) || null;
+  const dfrom  = document.getElementById('f-dfrom').value;
+  const dto    = document.getElementById('f-dto').value;
+
+  filtered = D.filter(r => {
+    if (me     && !ME_RE.test(r[3] || '')) return false;
+    if (search && !(
+      (r[4]||'').toLowerCase().includes(search) ||
+      (r[3]||'').toLowerCase().includes(search) ||
+      (r[0]||'').toLowerCase().includes(search)
+    )) return false;
+    if (visa   && r[2] !== visa)   return false;
+    if (status && r[1] !== status) return false;
+    if (state  && r[5] !== state)  return false;
+    if (soc    && r[9] !== soc)    return false;
+    if (wmin !== null || wmax !== null) {
+      const w = annualWage(r[6], r[7]);
+      if (w === null) return false;
+      if (wmin !== null && w < wmin) return false;
+      if (wmax !== null && w > wmax) return false;
+    }
+    if (dfrom && r[8] && r[8] < dfrom) return false;
+    if (dto   && r[8] && r[8] > dto)   return false;
+    return true;
+  });
+
+  doSort();
+  updateStats();
+  updateCharts();
+  renderTable();
+}
+
+function annualWage(from, unit) {
+  if (from == null) return null;
+  if (unit === 'Hour') return from * 2080;
+  if (unit === 'Year') return from;
+  return null;
+}
+
+// ── Sort ──────────────────────────────────────────────────────────────────────
+function sortBy(col) {
+  sortDir = (sortCol === col) ? -sortDir : (col === 8 || col === 6 ? -1 : 1);
+  sortCol = col;
+  [0,1,2,3,4,5,6,8].forEach(c => {
+    const th = document.getElementById('th'+c); if (!th) return;
+    th.classList.remove('sorted');
+    th.querySelector('.si').textContent = '↕';
+  });
+  const th = document.getElementById('th'+col);
+  if (th) { th.classList.add('sorted'); th.querySelector('.si').textContent = sortDir===-1?'↓':'↑'; }
+  page = 1; doSort(); renderTable();
+}
+
+function doSort() {
+  const c = sortCol, d = sortDir;
+  filtered.sort((a, b) => {
+    const av = a[c], bv = b[c];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number') return d * (bv - av);
+    return d * String(av).localeCompare(String(bv));
+  });
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const total = filtered.length;
+  const cert  = filtered.filter(r => r[1]==='Certified').length;
+  const cw    = filtered.filter(r => r[1]==='Certified - Withdrawn').length;
+  const with_ = filtered.filter(r => r[1]==='Withdrawn').length;
+  const deny  = filtered.filter(r => r[1]==='Denied').length;
+  const pct   = n => total ? (n/total*100).toFixed(1)+'%' : '—';
+  document.getElementById('s-total').textContent = total.toLocaleString();
+  document.getElementById('s-cert').textContent  = cert.toLocaleString();
+  document.getElementById('s-cw').textContent    = cw.toLocaleString();
+  document.getElementById('s-with').textContent  = with_.toLocaleString();
+  document.getElementById('s-deny').textContent  = deny.toLocaleString();
+  document.getElementById('s-cert-p').textContent = pct(cert)+' of total';
+  document.getElementById('s-cw-p').textContent   = pct(cw)+' of total';
+  document.getElementById('s-with-p').textContent = pct(with_)+' of total';
+  document.getElementById('s-deny-p').textContent = pct(deny)+' of total';
+  document.getElementById('t-count').textContent = total.toLocaleString();
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+function mkChart(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
+
+function updateCharts() {
+  const byStatus={}, byVisa={}, byMonth={}, byEmp={}, bySoc={};
+  filtered.forEach(r => {
+    if (r[1]) byStatus[r[1]] = (byStatus[r[1]]||0)+1;
+    if (r[2]) byVisa[r[2]]   = (byVisa[r[2]]||0)+1;
+    if (r[8]) { const m=r[8].slice(0,7); byMonth[m]=(byMonth[m]||0)+1; }
+    if (r[4]) byEmp[r[4]]    = (byEmp[r[4]]||0)+1;
+    if (r[9]) bySoc[r[9]]    = (bySoc[r[9]]||0)+1;
+  });
+
+  // Status donut
+  const sl = Object.keys(byStatus);
+  mkChart('c-status',{type:'doughnut',data:{labels:sl,datasets:[{data:sl.map(k=>byStatus[k]),
+    backgroundColor:sl.map(k=>STATUS_COLORS[k]||'rgba(124,124,124,.6)'),borderWidth:0,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'right',labels:{color:'#7c8499',font:{size:10},padding:10,boxWidth:10}}}}});
+
+  // Visa bar
+  const vl = Object.keys(byVisa);
+  mkChart('c-visa',{type:'bar',data:{labels:vl,datasets:[{data:vl.map(k=>byVisa[k]),
+    backgroundColor:PALETTE,borderRadius:6,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:AX,y:{...AX,beginAtZero:true}}}});
+
+  // Monthly line
+  const months = Object.keys(byMonth).sort();
+  const mLabels = months.map(m => { const [y,mo]=m.split('-'); return new Date(+y,+mo-1).toLocaleDateString('en-US',{month:'short',year:'2-digit'}); });
+  mkChart('c-time',{type:'line',data:{labels:mLabels,datasets:[{label:'Cases',data:months.map(m=>byMonth[m]),
+    borderColor:'rgba(79,110,247,.9)',backgroundColor:'rgba(79,110,247,.07)',fill:true,tension:.35,pointRadius:2,
+    pointBackgroundColor:'rgba(79,110,247,1)'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{...AX,ticks:{...AX.ticks,maxTicksLimit:12}},y:{...AX,beginAtZero:true}}}});
+
+  // Top employers
+  const topEmp = Object.entries(byEmp).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  mkChart('c-emp',{type:'bar',data:{labels:topEmp.map(e=>e[0].length>30?e[0].slice(0,28)+'…':e[0]),
+    datasets:[{data:topEmp.map(e=>e[1]),backgroundColor:'rgba(79,110,247,.7)',borderRadius:4,borderWidth:0}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{...AX,beginAtZero:true},y:{...AX,ticks:{...AX.ticks,font:{size:9}}}}}});
+
+  // Top SOC
+  const topSoc = Object.entries(bySoc).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  mkChart('c-soc',{type:'bar',data:{labels:topSoc.map(e=>e[0].length>32?e[0].slice(0,30)+'…':e[0]),
+    datasets:[{data:topSoc.map(e=>e[1]),backgroundColor:'rgba(124,58,237,.7)',borderRadius:4,borderWidth:0}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{...AX,beginAtZero:true},y:{...AX,ticks:{...AX.ticks,font:{size:9}}}}}});
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────────
+function pillClass(s) {
+  if (s==='Certified') return 'p-cert';
+  if (s==='Denied')    return 'p-deny';
+  if (s==='Certified - Withdrawn') return 'p-cw';
+  return 'p-with';
+}
+function fmtWage(r) {
+  const w = annualWage(r[6], r[7]);
+  if (w === null) return '—';
+  return '$'+Math.round(w).toLocaleString()+(r[7]==='Hour'?' <span style="font-size:9px;color:var(--muted)">/hr→yr</span>':'');
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderTable() {
+  const start = (page-1)*PER;
+  const slice = filtered.slice(start, start+PER);
+  const tbody = document.getElementById('tbody');
+  document.getElementById('t-page').textContent = page;
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty">No records match your filters.</div></td></tr>';
+    document.getElementById('pag').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = slice.map(r => `<tr>
+    <td class="mono">${esc(r[0])}</td>
+    <td><span class="pill ${pillClass(r[1])}">${esc(r[1])}</span></td>
+    <td><span class="tag">${esc(r[2])}</span></td>
+    <td>${esc(r[4])}</td>
+    <td>${esc(r[3])}</td>
+    <td>${r[5]||'—'}</td>
+    <td>${fmtWage(r)}</td>
+    <td>${r[8]||'—'}</td>
+  </tr>`).join('');
+
+  renderPag();
+}
+
+function renderPag() {
+  const total = Math.ceil(filtered.length/PER);
+  const pag = document.getElementById('pag');
+  if (total <= 1) { pag.innerHTML=''; return; }
+  const range = [1];
+  if (page > 3) range.push('…');
+  for (let i=Math.max(2,page-1); i<=Math.min(total-1,page+1); i++) range.push(i);
+  if (page < total-2) range.push('…');
+  if (total>1) range.push(total);
+  pag.innerHTML =
+    `<button class="pg" onclick="goPage(${page-1})" ${page===1?'disabled':''}>‹</button>` +
+    range.map(r => r==='…'
+      ? `<span class="pg" style="opacity:.3;cursor:default">…</span>`
+      : `<button class="pg ${r===page?'on':''}" onclick="goPage(${r})">${r}</button>`
+    ).join('') +
+    `<button class="pg" onclick="goPage(${page+1})" ${page===Math.ceil(filtered.length/PER)?'disabled':''}>›</button>`;
+}
+
+function goPage(n) {
+  const total = Math.ceil(filtered.length/PER);
+  if (n<1||n>total) return;
+  page = n; renderTable();
+  document.querySelector('.sh').scrollIntoView({behavior:'smooth',block:'start'});
+}
+</script>
+</body>
+</html>
